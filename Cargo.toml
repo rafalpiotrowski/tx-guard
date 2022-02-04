@@ -2,7 +2,25 @@
 name = "tx-guard"
 version = "0.1.0"
 edition = "2021"
+authors = ["Rafal Piotrowski <rafalpiotrowski@users.noreply.github.com>"]
+license = "MIT"
+readme = "README.md"
+#documentation = "https://docs.rs//"
+repository = "https://github.com/rafalpiotrowski/tx-guard"
+description = """
+Simple transaction processing system
+"""
+exclude = [".gitignore", ".github/**", "testdata/**"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tokio = { version = "1.16.1", features = ["full"] }
+tokio-stream = "0.1.8"
+serde = { version = "1.0.136", features = ["derive"] }
+csv-async = { version = "1.2.4", features = ["with_serde", "tokio"] }
+rust_decimal = { version = "1.21.0", features = ["serde-with-float", "serde-with-str"] }
+
+[dev-dependencies]
+# Enable test-utilities in dev mode only. This is mostly for tests.
+tokio = { version = "1.16.1", features = ["test-util"] }
