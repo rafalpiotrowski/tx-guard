@@ -8,8 +8,7 @@ use tokio::task::JoinHandle;
 use tokio::{
     fs::File,
     sync::{
-        mpsc::{self, UnboundedReceiver, UnboundedSender},
-        oneshot::{self, Receiver, Sender},
+        mpsc::{self, Receiver, Sender},
     },
 };
 use tokio_stream::StreamExt;
@@ -67,7 +66,7 @@ struct Account {
 #[derive(Debug, Clone)]
 struct AccountProcess {
     client_id: ClientId,
-    transactions: UnboundedSender<Transaction>,
+    transactions: Sender<Transaction>,
 }
 
 #[tokio::main]
@@ -75,8 +74,8 @@ async fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let data_file_path = String::from(&args[1]);
 
-    let (tx_account, mut rx_account) = mpsc::unbounded_channel::<Account>();
-    let (tx_transaction, mut rx_transaction) = mpsc::unbounded_channel::<Transaction>();
+    let (tx_account, mut rx_account) = mpsc::channel::<Account>(32);
+    let (tx_transaction, mut rx_transaction) = mpsc::channel::<Transaction>(32);
     
     let processing_data = process_data_file(data_file_path, tx_transaction);
     let process_transactions = process_transactions(rx_transaction);
@@ -89,20 +88,20 @@ async fn main() -> std::io::Result<()> {
     Ok(())
 }
 
-async fn process_transactions(mut rx: UnboundedReceiver<Transaction>) {
+async fn process_transactions(mut rx: Receiver<Transaction>) {
     let mut procs = HashMap::<ClientId, AccountProcess>::new();
     
     let mut tx_count = 0;
 
     while let Some(t) = rx.recv().await {
         tx_count += 1;
-        println!("processing tx {tx_count} {:?}", t);
+        //println!("processing tx {tx_count} {:?}", t);
         let link = procs.get_key_value(&t.client_id);
         match link {
             None => {
-                let (tx_transaction, rx_transaction) = mpsc::unbounded_channel::<Transaction>();
+                let (tx_transaction, rx_transaction) = mpsc::channel::<Transaction>(32);
                 let t1 = t.clone();
-                tx_transaction.send(t1).unwrap();
+                tx_transaction.send(t1).await;
                 procs.insert(
                     t.client_id,
                     AccountProcess {
@@ -115,25 +114,25 @@ async fn process_transactions(mut rx: UnboundedReceiver<Transaction>) {
                 });
             }
             Some((k, proc)) => {
-                proc.transactions.send(t).unwrap();
+                proc.transactions.send(t).await;
             }
         }
     }
 
-    println!("finished distributing transactions");
+    //println!("finished distributing transactions");
 
     let last_tx = Transaction::default();
     
     for p in procs.values() {
-        p.transactions.send(last_tx).unwrap();
+        p.transactions.send(last_tx).await;
         p.transactions.closed().await;
-        println!("accountprocess {} tx is closed: {}", p.client_id, p.transactions.is_closed());
+        //println!("accountprocess {} tx is closed: {}", p.client_id, p.transactions.is_closed());
     }
 }
 
 async fn process_data_file(
     data_file_path: String,
-    tx: UnboundedSender<Transaction>,
+    tx: Sender<Transaction>,
 ) -> std::io::Result<()> {
     let mut rdr = csv_async::AsyncReaderBuilder::new()
         .delimiter(b',')
@@ -144,17 +143,17 @@ async fn process_data_file(
     let mut records = rdr.deserialize::<Transaction>();
     while let Some(record) = records.next().await {
         let record = record?;
-        tx.send(record).unwrap();
+        tx.send(record).await;
     }
 
-    println!("finished processing data");
+    //println!("finished processing data");
 
     Ok(())
 }
 
 async fn process_account_transactions(
     id: ClientId,
-    mut rx: UnboundedReceiver<Transaction>
+    mut rx: Receiver<Transaction>
 ) {
     use TxType::*;
 
@@ -167,7 +166,7 @@ async fn process_account_transactions(
     };
 
     while let Some(t) = rx.recv().await {
-        println!("processing {:?}", t);
+        //println!("processing {:?}", t);
         match t.tx_type {
             Deposit => account.available_amount += t.amount,
             Withdrawal => {}
