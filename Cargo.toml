@@ -15,6 +15,7 @@ exclude = [".gitignore", ".github/**", "testdata/**"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+futures = "0.3.19"
 tokio = { version = "1.16.1", features = ["full"] }
 tokio-stream = "0.1.8"
 serde = { version = "1.0.136", features = ["derive"] }

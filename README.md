@@ -16,3 +16,6 @@ tx amount: decimal value with precision of upto 4 places past the decimal
 
 # How to run it?
 $ cargo run -- input_data_file_name.csv > output_data_file_name.csv
+
+# used dependencies
+csv-async
