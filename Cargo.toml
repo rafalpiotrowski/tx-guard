@@ -14,13 +14,20 @@ exclude = [".gitignore", ".github/**", "testdata/**"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "txp"
+path = "src/lib.rs"
+
 [dependencies]
 futures = "0.3.19"
 tokio = { version = "1.16.1", features = ["full"] }
 tokio-stream = "0.1.8"
+tracing = "0.1.30"
+tracing-subscriber = "0.3.8"
 serde = { version = "1.0.136", features = ["derive"] }
 csv-async = { version = "1.2.4", features = ["with_serde", "tokio"] }
-rust_decimal = { version = "1.21.0", features = ["serde-with-float", "serde-with-str"] }
+# this crate could be used to better represend money at the moment using f32
+#rust_decimal = { version = "1.21.0", features = ["serde-with-float", "serde-with-str"] }
 
 [dev-dependencies]
 # Enable test-utilities in dev mode only. This is mostly for tests.
