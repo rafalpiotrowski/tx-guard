@@ -1,9 +1,5 @@
 #![deny(warnings)]
 
-/// Default size of the channel buffer
-///
-pub const DEFAULT_CHANNEL_SIZE: u8 = 32;
-
 /// Error returned by most functions.
 ///
 /// When writing a real application, one might want to consider a specialized

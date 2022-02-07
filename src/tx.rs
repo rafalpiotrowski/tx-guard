@@ -276,7 +276,7 @@ impl TxProcessor {
     ///
     ///
     /// 'mut rx'
-    pub async fn process_transactions(mut tx_receiver: Receiver<Option<Transaction>>) {
+    pub async fn process_transactions(mut tx_receiver: Receiver<Option<Transaction>>, buffer_size: usize) {
         let mut procs = HashMap::<ClientId, AccountProcess>::new();
 
         let mut tx_count = 0;
@@ -288,7 +288,7 @@ impl TxProcessor {
             match link {
                 None => {
                     let (acc_tx_sender, acc_tx_receiver) =
-                        tokio::sync::mpsc::channel::<Option<Transaction>>(32);
+                        tokio::sync::mpsc::channel::<Option<Transaction>>(buffer_size);
                     procs.insert(
                         t.client_id,
                         AccountProcess {

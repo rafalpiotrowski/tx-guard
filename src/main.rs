@@ -30,12 +30,16 @@ arg_enum! {
 #[derive(StructOpt, Debug)]
 #[structopt(name = "tx-guard", version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"), about = "Transaction Processing Guard")]
 struct Opt {
-    /// Tracing argument.
-    #[structopt(long, short, name = "tracing level", possible_values = &TracingLevel::variants(), case_insensitive = true)]
+    /// Tracing level.
+    #[structopt(long, short, possible_values = &TracingLevel::variants(), case_insensitive = true)]
     tracing: Option<TracingLevel>,
 
+    /// Size of the channel buffer
+    #[structopt(short, long, default_value="32")]
+    buffer: usize,
+
     /// CSV file to process
-    #[structopt(name = "csv file", parse(from_os_str))]
+    #[structopt(name = "file", parse(from_os_str))]
     csv_file: PathBuf,
 }
 
@@ -76,7 +80,7 @@ async fn main() -> Result<()> {
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
-    let (tx_transaction, rx_transaction) = mpsc::channel::<Option<Transaction>>(32);
+    let (tx_transaction, rx_transaction) = mpsc::channel::<Option<Transaction>>(opt.buffer);
 
     // function clousure that converts raw transaction into transaction and sends it down for processing 
     // when we get None to process, it is the signal to finish processing
@@ -94,7 +98,7 @@ async fn main() -> Result<()> {
     let data_reader =
         CsvTransactionReader::process_data_file(opt.csv_file, process_raw_transaction);
 
-    let process_transactions = TxProcessor::process_transactions(rx_transaction);
+    let process_transactions = TxProcessor::process_transactions(rx_transaction, opt.buffer);
 
     println!("client,available,held,total,locked");
 
