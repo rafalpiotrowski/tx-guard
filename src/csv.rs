@@ -57,8 +57,8 @@ impl CsvTransactionReader {
 
     /// Data processing function. Function calls panic! on the first error it gets.
     /// 
-    /// 'data_file_path' full path to the file we want to process
-    /// 'raw_transaction_handler' function that process the raw transaction
+    /// `data_file_path` full path to the file we want to process
+    /// `raw_transaction_handler` function that process the raw transaction
     pub async fn process_data_file<F, Fut>(
         data_file_path: PathBuf,
         raw_transaction_handler: F,
@@ -111,6 +111,7 @@ impl CsvTransactionReader {
 
         debug!("all data processed from input file");
 
+        // inform that we have finished processing all data
         let r = raw_transaction_handler(Option::None).await;
         match r {
             Ok(_) => (),

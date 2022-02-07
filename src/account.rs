@@ -60,6 +60,9 @@ impl Account {
     /// `history` mutable reference to the history of all transaction for given account
     /// 
     /// return new Account instrance
+    /// 
+    /// todo: improvement could be done in order to make this pure function. 
+    /// One ide is to return info that another transaction should be changed
     pub(crate) fn process_transaction(
         &self,
         t: &Transaction,
