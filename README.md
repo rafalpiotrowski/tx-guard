@@ -37,6 +37,9 @@ ARGS:
     <file>    CSV file to process
 
 
+## run tests
+in the project root folder type `cargo test`
+
 # Data file correctnes
 At the moment, if supplied data file has any errors (e.g. missing column, wrong formatting etc) system will exit with panic! giving details about the problem.
 
@@ -73,3 +76,6 @@ tx amount: decimal value with precision of upto 4 places past the decimal (syste
 `serde = { version = "1.0.136", features = ["derive"] }` (https://crates.io/crates/serde)
 
 `csv-async = { version = "1.2.4", features = ["with_serde", "tokio"] }` (https://crates.io/crates/csv-async)
+
+# Security vulnerabilities
+run `cargo audit` (https://lib.rs/crates/cargo-audit) to get report on the possible security issues
