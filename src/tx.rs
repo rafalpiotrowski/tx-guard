@@ -1,13 +1,12 @@
-use std::{collections::HashMap, hash::Hash, borrow::BorrowMut};
+use std::collections::HashMap;
 
-use futures::Future;
 use serde::Deserialize;
 use tokio::sync::mpsc::{Receiver, Sender};
-use tracing::{debug, info, trace, error};
+use tracing::{debug, info, trace};
 
 use crate::{
     csv::{RawAccount, RawTransaction},
-    ClientId, Money, TxId, Error,
+    ClientId, Money, TxId,
 };
 
 #[derive(Debug)]
@@ -45,7 +44,7 @@ impl From<RawTransaction> for Transaction {
                             let r = str_amount.parse::<f32>();
                             match r {
                                 Ok(value) => value,
-                                Err(e) => panic!("cannot convert amount '{}' to f32", str_amount),
+                                Err(_e) => panic!("cannot convert amount '{}' to f32", str_amount),
                             }
                         }
                     },
@@ -301,10 +300,10 @@ impl TxProcessor {
                         TxProcessor::process_account_transactions(t.client_id, acc_tx_receiver)
                             .await;
                     });
-                    acc_tx_sender.send(Some(t)).await;
+                    let _ = acc_tx_sender.send(Some(t)).await;
                 }
-                Some((k, proc)) => {
-                    proc.transactions.send(Some(t)).await;
+                Some((_k, proc)) => {
+                    let _ = proc.transactions.send(Some(t)).await;
                 }
             }
         }
@@ -312,7 +311,7 @@ impl TxProcessor {
         debug!("finished distributing transactions: shutting down account tasks");
 
         for p in procs.values() {
-            p.transactions.send(Option::None).await;
+            let _ = p.transactions.send(Option::None).await;
             p.transactions.closed().await;
             trace!(
                 "accountprocess {} tx is closed: {}",

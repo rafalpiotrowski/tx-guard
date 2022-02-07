@@ -1,10 +1,12 @@
+#![deny(warnings)]
+
 use std::path::PathBuf;
 
 use tokio::{
     sync::mpsc::{self},
 };
 
-use tracing::{info, trace, Level};
+use tracing::{Level};
 use tracing_subscriber::FmtSubscriber;
 use txp::{
     csv::{CsvTransactionReader, RawTransaction},
@@ -74,7 +76,7 @@ async fn main() -> Result<()> {
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
-    let (tx_transaction, mut rx_transaction) = mpsc::channel::<Option<Transaction>>(32);
+    let (tx_transaction, rx_transaction) = mpsc::channel::<Option<Transaction>>(32);
 
     // function clousure that converts raw transaction into transaction and sends it down for processing 
     // when we get None to process, it is the signal to finish processing
@@ -85,7 +87,7 @@ async fn main() -> Result<()> {
         };
         match send_result {
             Ok(_) => Ok(()),
-            Err(e) => Err("Failed to send transaction down the channel".to_string()),
+            Err(_e) => Err("Failed to send transaction down the channel".to_string()),
         }
     };
 
@@ -96,7 +98,7 @@ async fn main() -> Result<()> {
 
     println!("client,available,held,total,locked");
 
-    let r = tokio::join!(data_reader, process_transactions);
+    tokio::join!(data_reader, process_transactions);
 
     Ok(())
 }

@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 /// Default size of the channel buffer
 ///
 pub const DEFAULT_CHANNEL_SIZE: u8 = 32;

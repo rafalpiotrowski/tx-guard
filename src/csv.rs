@@ -4,9 +4,9 @@ use futures::Future;
 use tokio::fs::File;
 use tokio_stream::StreamExt;
 
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, trace};
 
-use crate::{tx::TxType, ClientId, Money, Result, TxId};
+use crate::{tx::TxType, ClientId, Money, TxId};
 
 /// Representation of the single row in the input CSV file
 ///
