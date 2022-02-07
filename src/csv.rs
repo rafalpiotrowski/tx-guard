@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use futures::Future;
 use tokio::fs::File;
 use tokio_stream::StreamExt;
@@ -58,14 +60,14 @@ impl CsvTransactionReader {
     /// 'data_file_path' full path to the file we want to process
     /// 'raw_transaction_handler' function that process the raw transaction
     pub async fn process_data_file<F, Fut>(
-        data_file_path: String,
+        data_file_path: PathBuf,
         raw_transaction_handler: F,
     ) 
     where
         F: Fn(Option<RawTransaction>) -> Fut,
         Fut: Future<Output = std::result::Result<(), String>>,
     {
-        debug!("processing data file: {}", &data_file_path);
+        debug!("processing data file: {:?}", &data_file_path);
 
         let r = File::open(data_file_path).await;
         let file = match r {

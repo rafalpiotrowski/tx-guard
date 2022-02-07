@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use tokio::{
     sync::mpsc::{self},
 };
@@ -10,7 +12,32 @@ use txp::{
     Result,
 };
 
-/// Entry point for CLI tool.
+use structopt::{StructOpt, clap::arg_enum};
+
+arg_enum! {
+    #[derive(Debug)]
+    enum TracingLevel {
+        Error,
+        Warn,
+        Info,
+        Debug,
+        Trace
+    }
+}
+
+#[derive(StructOpt, Debug)]
+#[structopt(name = "tx-guard", version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"), about = "Transaction Processing Guard")]
+struct Opt {
+    /// Tracing argument.
+    #[structopt(long, short, name = "tracing level", possible_values = &TracingLevel::variants(), case_insensitive = true)]
+    tracing: Option<TracingLevel>,
+
+    /// CSV file to process
+    #[structopt(name = "csv file", parse(from_os_str))]
+    csv_file: PathBuf,
+}
+
+/// Entry point.
 ///
 /// The `[tokio::main]` annotation signals that the Tokio runtime should be
 /// started when the function is called. The body of the function is executed
@@ -21,21 +48,31 @@ use txp::{
 /// multi-threaded. use: #[tokio::main(flavor = "current_thread")]
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Enable logging
-    // tracing_subscriber::fmt::try_init()?;
+
+    let opt = Opt::from_args();
+
+    let tracing_level = match opt.tracing {
+        Some(l) => {
+            match l {
+                TracingLevel::Error => Level::ERROR,
+                TracingLevel::Warn => Level::WARN,
+                TracingLevel::Info => Level::INFO,
+                TracingLevel::Debug => Level::DEBUG,
+                TracingLevel::Trace => Level::TRACE,
+            }
+        }
+        None => Level::ERROR
+    };
 
     // a builder for `FmtSubscriber`.
     let subscriber = FmtSubscriber::builder()
         // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
         // will be written to stdout.
-        .with_max_level(Level::ERROR)
+        .with_max_level(tracing_level)
         // completes the builder.
         .finish();
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
-
-    let args: Vec<String> = std::env::args().collect();
-    let data_file_path = String::from(&args[1]);
 
     let (tx_transaction, mut rx_transaction) = mpsc::channel::<Option<Transaction>>(32);
 
@@ -53,7 +90,7 @@ async fn main() -> Result<()> {
     };
 
     let data_reader =
-        CsvTransactionReader::process_data_file(data_file_path, process_raw_transaction);
+        CsvTransactionReader::process_data_file(opt.csv_file, process_raw_transaction);
 
     let process_transactions = TxProcessor::process_transactions(rx_transaction);
 
