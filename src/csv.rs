@@ -2,7 +2,7 @@ use futures::Future;
 use tokio::fs::File;
 use tokio_stream::StreamExt;
 
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, trace};
 
 use crate::{tx::TxType, ClientId, Money, Result, TxId};
 
@@ -65,11 +65,18 @@ impl CsvTransactionReader {
         F: Fn(Option<RawTransaction>) -> Fut,
         Fut: Future<Output = std::result::Result<(), String>>,
     {
+        debug!("processing data file: {}", &data_file_path);
+
         let r = File::open(data_file_path).await;
         let file = match r {
             Ok(file) => file,
-            Err(e) => panic!("{e}") 
+            Err(e) => {
+                error!("failed opening data file: {}", e);
+                panic!("failed opening data file: {e}");
+            } 
         };
+
+        trace!("data file opened; creating csv reader");
 
         let mut rdr = csv_async::AsyncReaderBuilder::new()
             .delimiter(b',')
@@ -79,13 +86,18 @@ impl CsvTransactionReader {
             .create_deserializer(file);
 
         let mut records = rdr.deserialize::<RawTransaction>();
+
         while let Some(record) = records.next().await {
             match record {
                 Ok(t) => {
+                    trace!("processing raw transaction: {:?}", &t);
                     let r = raw_transaction_handler(Some(t)).await;
                     match r {
                         Ok(_) => continue,
-                        Err(e) => panic!("{e}"),
+                        Err(e) => {
+                            error!("failed handling raw transaction: {}", e);
+                            panic!("failed handling raw transaction: {e}");
+                        }
                     }
                 }
                 Err(err) => {
@@ -95,8 +107,17 @@ impl CsvTransactionReader {
             }
         }
 
-        raw_transaction_handler(Option::None).await;
+        debug!("all data processed from input file");
 
-        info!("finished processing input file");
+        let r = raw_transaction_handler(Option::None).await;
+        match r {
+            Ok(_) => (),
+            Err(e) => {
+                error!("failed to send end of data msg: {}", e);
+                panic!("failed to send end of data msg: {e}");
+            }
+        }
+        
+        debug!("finished processing input file");
     }
 }

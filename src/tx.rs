@@ -1,10 +1,27 @@
+use std::{collections::HashMap, hash::Hash, borrow::BorrowMut};
+
+use futures::Future;
 use serde::Deserialize;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Receiver, Sender};
+use tracing::{debug, info, trace, error};
 
 use crate::{
     csv::{RawAccount, RawTransaction},
-    ClientId, Money, TxId,
+    ClientId, Money, TxId, Error,
 };
+
+#[derive(Debug)]
+pub enum AccountError {
+    /// Account is frozen, cannot perform any other operation on it
+    Frozen(ClientId),
+
+    NoTxForDispute(TxId),
+
+    TxNotInDispute(TxId),
+
+    /// other error case
+    Other(crate::Error),
+}
 
 #[derive(Debug, Clone)]
 pub struct Transaction {
@@ -12,6 +29,7 @@ pub struct Transaction {
     pub client_id: ClientId,
     pub tx_id: TxId,
     pub amount: Money,
+    pub in_dispute: bool
 }
 /// convert RawTransaction into Transaction
 impl From<RawTransaction> for Transaction {
@@ -35,11 +53,12 @@ impl From<RawTransaction> for Transaction {
             tx_type: t.tx_type,
             tx_id: t.tx_id,
             client_id: t.client_id,
+            in_dispute: false,
         }
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum TxType {
     // A deposit is a credit to the client's asset account, meaning it should increase the available and
@@ -103,9 +122,234 @@ impl From<Account> for RawAccount {
         }
     }
 }
+impl Default for Account {
+    fn default() -> Self {
+        Self {
+            client_id: Default::default(),
+            available_amount: Default::default(),
+            held_amount: Default::default(),
+            total_amount: Default::default(),
+            is_locked: Default::default()
+        }
+    }
+}
+impl Account {
+
+    fn process_transaction(&self, t: &Transaction, history: &mut HashMap<TxId, Transaction>) -> core::result::Result<Self, AccountError> {
+        use TxType::*;
+
+        match t.tx_type {
+            Deposit => {
+                self.deposit(t.amount)
+            }
+            Withdrawal => {
+                self.withdrawal(t.amount)
+            }
+            Dispute => {
+                self.dispute(t.tx_id, history)
+            }
+            Resolve => {
+                self.resolve(t.tx_id, history)
+            }
+            Chargeback => {
+                self.chargeback(t.tx_id, history)
+            }
+        }
+    }
+
+    fn deposit(&self, amount: Money) -> core::result::Result<Self, AccountError> {
+        if self.is_locked {
+            Err(AccountError::Frozen(self.client_id))
+        } else {
+            let mut a = Account::default();
+            a.client_id = self.client_id;
+            a.available_amount = self.available_amount + amount;
+            a.held_amount = self.held_amount;
+            a.total_amount = a.available_amount + a.held_amount;
+            Ok(a)
+        }
+    }
+
+    fn withdrawal(&self, amount: Money) -> core::result::Result<Self, AccountError> {
+        if self.is_locked {
+            Err(AccountError::Frozen(self.client_id))
+        } else {
+            let mut a = Account::default();
+            a.client_id = self.client_id;
+            a.available_amount = self.available_amount - amount;
+            a.held_amount = self.held_amount;
+            a.total_amount = a.available_amount + a.held_amount;
+            Ok(a)
+        }
+    }
+
+    fn dispute(
+        &self,
+        tx_id: TxId,
+        history: &mut HashMap<TxId, Transaction>,
+    ) -> core::result::Result<Self, AccountError> {
+        if self.is_locked {
+            return Err(AccountError::Frozen(self.client_id));
+        }
+
+        let t = history.get_mut(&tx_id);
+        match t {
+            Some(tx) => {
+                tx.in_dispute = true;
+                let mut a = Account::default();
+                a.client_id = self.client_id;
+                a.available_amount = self.available_amount - tx.amount;
+                a.held_amount = self.held_amount + tx.amount;
+                a.total_amount = a.available_amount + a.held_amount;
+                Ok(a)
+            }
+            None => Err(AccountError::NoTxForDispute(tx_id)),
+        }
+    }
+
+    fn resolve(
+        &self,
+        tx_id: TxId,
+        history: &mut HashMap<TxId, Transaction>,
+    ) -> core::result::Result<Self, AccountError> {
+        if self.is_locked {
+            return Err(AccountError::Frozen(self.client_id));
+        }
+
+        let t = history.get_mut(&tx_id);
+        match t {
+            Some(tx) => {
+                tx.in_dispute = false;
+                let mut a = Account::default();
+                a.client_id = self.client_id;
+                a.available_amount = self.available_amount + tx.amount;
+                a.held_amount = self.held_amount - tx.amount;
+                a.total_amount = a.available_amount + a.held_amount;
+                Ok(a)
+            }
+            None => Err(AccountError::NoTxForDispute(tx_id)),
+        }
+    }
+
+    fn chargeback(
+        &self,
+        tx_id: TxId,
+        history: &mut HashMap<TxId, Transaction>,
+    ) -> core::result::Result<Self, AccountError> {
+        if self.is_locked {
+            return Err(AccountError::Frozen(self.client_id));
+        }
+        let t = history.get_mut(&tx_id);
+        match t {
+            Some(tx) => {
+                if tx.in_dispute {
+                    tx.in_dispute = false;
+                    let mut a = Account::default();
+                    a.client_id = self.client_id;
+                    a.available_amount = self.available_amount;
+                    a.held_amount = self.held_amount - tx.amount;
+                    a.total_amount = a.available_amount + a.held_amount;
+                    a.is_locked = true;
+                    Ok(a)
+                } else {
+                    error!("WRONG STATE: {:?}", &tx);
+                    Err(AccountError::TxNotInDispute(tx_id))
+                }
+            }
+            None => Err(AccountError::NoTxForDispute(tx_id)),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct AccountProcess {
     pub client_id: ClientId,
     pub transactions: Sender<Option<Transaction>>,
+}
+
+/// Transaction processing functionality
+pub struct TxProcessor {}
+
+impl TxProcessor {
+    ///
+    ///
+    /// 'mut rx'
+    pub async fn process_transactions(mut tx_receiver: Receiver<Option<Transaction>>) {
+        let mut procs = HashMap::<ClientId, AccountProcess>::new();
+
+        let mut tx_count = 0;
+
+        while let Some(Some(t)) = tx_receiver.recv().await {
+            tx_count += 1;
+            trace!("processing tx {tx_count} {:?}", t);
+            let link = procs.get_key_value(&t.client_id);
+            match link {
+                None => {
+                    let (acc_tx_sender, acc_tx_receiver) =
+                        tokio::sync::mpsc::channel::<Option<Transaction>>(32);
+                    procs.insert(
+                        t.client_id,
+                        AccountProcess {
+                            client_id: t.client_id,
+                            transactions: acc_tx_sender.clone(),
+                        },
+                    );
+                    tokio::spawn(async move {
+                        TxProcessor::process_account_transactions(t.client_id, acc_tx_receiver)
+                            .await;
+                    });
+                    acc_tx_sender.send(Some(t)).await;
+                }
+                Some((k, proc)) => {
+                    proc.transactions.send(Some(t)).await;
+                }
+            }
+        }
+
+        debug!("finished distributing transactions: shutting down account tasks");
+
+        for p in procs.values() {
+            p.transactions.send(Option::None).await;
+            p.transactions.closed().await;
+            trace!(
+                "accountprocess {} tx is closed: {}",
+                p.client_id,
+                p.transactions.is_closed()
+            );
+        }
+
+        info!("done")
+    }
+
+    async fn process_account_transactions(id: ClientId, mut rx: Receiver<Option<Transaction>>) {
+
+        let mut account = Account::default();
+        account.client_id = id;
+
+        trace!("created account {:?}", &account);
+
+        //internal index of transaction, we increment with each arival
+        let mut tx_index: u32 = 0;
+
+        //local history of transactions made to this account
+        let mut transactions = HashMap::<u32, Transaction>::new();
+
+        while let Some(Some(t)) = rx.recv().await {
+            trace!("account {} processing {:?}", account.client_id, t);
+            let r = account.process_transaction(&t, &mut transactions);
+            match r {
+                Ok(a) => account = a,
+                Err(e) => {
+                    error!("{:?}", e);
+                }
+            }
+            if t.tx_type == TxType::Deposit || t.tx_type == TxType::Withdrawal {
+                transactions.insert(t.tx_id, t);
+            }
+
+            trace!("account state: {:?}", &account);
+        }
+
+        println!("{:?}", account);
+    }
 }
