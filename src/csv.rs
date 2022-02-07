@@ -6,7 +6,7 @@ use tokio_stream::StreamExt;
 
 use tracing::{debug, error, trace};
 
-use crate::{tx::TxType, ClientId, Money, TxId};
+use crate::{TxType, ClientId, Money, TxId};
 
 /// Representation of the single row in the input CSV file
 ///

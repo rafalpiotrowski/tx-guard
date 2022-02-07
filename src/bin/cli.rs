@@ -9,8 +9,9 @@ use tokio::{
 use tracing::{Level};
 use tracing_subscriber::FmtSubscriber;
 use txp::{
+    Transaction,
     csv::{CsvTransactionReader, RawTransaction},
-    tx::{Transaction, TxProcessor},
+    tx::TxProcessor,
     Result,
 };
 
@@ -80,14 +81,14 @@ async fn main() -> Result<()> {
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
-    let (tx_transaction, rx_transaction) = mpsc::channel::<Option<Transaction>>(opt.buffer);
+    let (tx_sender, tx_receiver) = mpsc::channel::<Option<Transaction>>(opt.buffer);
 
     // function clousure that converts raw transaction into transaction and sends it down for processing 
     // when we get None to process, it is the signal to finish processing
     let process_raw_transaction = |t: Option<RawTransaction>| async {
         let send_result = match t {
-            Some(rt) => tx_transaction.send(Some(rt.into())).await,
-            None => tx_transaction.send(Option::None).await,
+            Some(rt) => tx_sender.send(Some(rt.into())).await,
+            None => tx_sender.send(Option::None).await,
         };
         match send_result {
             Ok(_) => Ok(()),
@@ -98,8 +99,9 @@ async fn main() -> Result<()> {
     let data_reader =
         CsvTransactionReader::process_data_file(opt.csv_file, process_raw_transaction);
 
-    let process_transactions = TxProcessor::process_transactions(rx_transaction, opt.buffer);
+    let process_transactions = TxProcessor::process_transactions(tx_receiver, opt.buffer);
 
+    // prints row with column headers
     println!("client,available,held,total,locked");
 
     tokio::join!(data_reader, process_transactions);
