@@ -28,7 +28,7 @@ arg_enum! {
 }
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "tx-guard", version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"), about = "Transaction Processing Guard")]
+#[structopt(name = "txp", version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"), about = "Transaction Processing System")]
 struct Opt {
     /// Tracing level.
     #[structopt(long, short, possible_values = &TracingLevel::variants(), case_insensitive = true)]

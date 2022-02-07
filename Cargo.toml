@@ -1,5 +1,5 @@
 [package]
-name = "tx-guard"
+name = "txp"
 version = "0.1.0"
 edition = "2021"
 authors = ["Rafal Piotrowski <rafalpiotrowski@users.noreply.github.com>"]
@@ -17,6 +17,10 @@ exclude = [".gitignore", ".github/**", "testdata/**"]
 [lib]
 name = "txp"
 path = "src/lib.rs"
+
+[[bin]]
+name = "txp-cli"
+path = "src/bin/cli.rs"
 
 [dependencies]
 futures = "0.3.19"
