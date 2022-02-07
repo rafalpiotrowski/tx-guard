@@ -256,7 +256,6 @@ impl Account {
                     a.is_locked = true;
                     Ok(a)
                 } else {
-                    error!("WRONG STATE: {:?}", &tx);
                     Err(AccountError::TxNotInDispute(tx_id))
                 }
             }
@@ -322,7 +321,7 @@ impl TxProcessor {
             );
         }
 
-        info!("done")
+        debug!("all account processing tasks has been closed");
     }
 
     async fn process_account_transactions(id: ClientId, mut rx: Receiver<Option<Transaction>>) {
@@ -330,10 +329,7 @@ impl TxProcessor {
         let mut account = Account::default();
         account.client_id = id;
 
-        trace!("created account {:?}", &account);
-
-        //internal index of transaction, we increment with each arival
-        let mut tx_index: u32 = 0;
+        debug!("created account {:?}", &account);
 
         //local history of transactions made to this account
         let mut transactions = HashMap::<u32, Transaction>::new();
@@ -344,7 +340,7 @@ impl TxProcessor {
             match r {
                 Ok(a) => account = a,
                 Err(e) => {
-                    error!("{:?}", e);
+                    info!("{:?}", e);
                 }
             }
             if t.tx_type == TxType::Deposit || t.tx_type == TxType::Withdrawal {
@@ -354,6 +350,8 @@ impl TxProcessor {
             trace!("account state: {:?}", &account);
         }
 
-        println!("{:?}", account);
+        debug!("{:?}", account);
+
+        println!("{0},{1:.4},{2:.4},{3:.4},{4}", account.client_id, account.available_amount, account.held_amount, account.total_amount, account.is_locked);
     }
 }

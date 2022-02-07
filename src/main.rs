@@ -28,7 +28,7 @@ async fn main() -> Result<()> {
     let subscriber = FmtSubscriber::builder()
         // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
         // will be written to stdout.
-        .with_max_level(Level::TRACE)
+        .with_max_level(Level::ERROR)
         // completes the builder.
         .finish();
 
@@ -56,6 +56,8 @@ async fn main() -> Result<()> {
         CsvTransactionReader::process_data_file(data_file_path, process_raw_transaction);
 
     let process_transactions = TxProcessor::process_transactions(rx_transaction);
+
+    println!("client,available,held,total,locked");
 
     let r = tokio::join!(data_reader, process_transactions);
 
