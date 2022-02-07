@@ -15,6 +15,8 @@ pub enum AccountError {
     /// Account is frozen, cannot perform any other operation on it
     Frozen(ClientId),
 
+    InssuficientFundsForWithdrawal(ClientId),
+
     NoTxForDispute(TxId),
 
     TxNotInDispute(TxId),
@@ -173,6 +175,8 @@ impl Account {
     fn withdrawal(&self, amount: Money) -> core::result::Result<Self, AccountError> {
         if self.is_locked {
             Err(AccountError::Frozen(self.client_id))
+        } else if self.available_amount < amount {
+            Err(AccountError::InssuficientFundsForWithdrawal(self.client_id))
         } else {
             let mut a = Account::default();
             a.client_id = self.client_id;
