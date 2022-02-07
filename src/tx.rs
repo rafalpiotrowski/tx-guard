@@ -30,7 +30,7 @@ pub struct Transaction {
     pub client_id: ClientId,
     pub tx_id: TxId,
     pub amount: Money,
-    pub in_dispute: bool
+    pub in_dispute: bool,
 }
 /// convert RawTransaction into Transaction
 impl From<RawTransaction> for Transaction {
@@ -100,7 +100,7 @@ pub enum TxType {
     Chargeback,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Account {
     pub client_id: ClientId,
     // The total funds that are available for trading, staking, withdrawal, etc. This
@@ -130,31 +130,24 @@ impl Default for Account {
             available_amount: Default::default(),
             held_amount: Default::default(),
             total_amount: Default::default(),
-            is_locked: Default::default()
+            is_locked: Default::default(),
         }
     }
 }
 impl Account {
-
-    fn process_transaction(&self, t: &Transaction, history: &mut HashMap<TxId, Transaction>) -> core::result::Result<Self, AccountError> {
+    fn process_transaction(
+        &self,
+        t: &Transaction,
+        history: &mut HashMap<TxId, Transaction>,
+    ) -> core::result::Result<Self, AccountError> {
         use TxType::*;
 
         match t.tx_type {
-            Deposit => {
-                self.deposit(t.amount)
-            }
-            Withdrawal => {
-                self.withdrawal(t.amount)
-            }
-            Dispute => {
-                self.dispute(t.tx_id, history)
-            }
-            Resolve => {
-                self.resolve(t.tx_id, history)
-            }
-            Chargeback => {
-                self.chargeback(t.tx_id, history)
-            }
+            Deposit => self.deposit(t.amount),
+            Withdrawal => self.withdrawal(t.amount),
+            Dispute => self.dispute(t.tx_id, history),
+            Resolve => self.resolve(t.tx_id, history),
+            Chargeback => self.chargeback(t.tx_id, history),
         }
     }
 
@@ -222,13 +215,17 @@ impl Account {
         let t = history.get_mut(&tx_id);
         match t {
             Some(tx) => {
-                tx.in_dispute = false;
-                let mut a = Account::default();
-                a.client_id = self.client_id;
-                a.available_amount = self.available_amount + tx.amount;
-                a.held_amount = self.held_amount - tx.amount;
-                a.total_amount = a.available_amount + a.held_amount;
-                Ok(a)
+                if tx.in_dispute {
+                    tx.in_dispute = false;
+                    let mut a = Account::default();
+                    a.client_id = self.client_id;
+                    a.available_amount = self.available_amount + tx.amount;
+                    a.held_amount = self.held_amount - tx.amount;
+                    a.total_amount = a.available_amount + a.held_amount;
+                    Ok(a)
+                } else {
+                    Err(AccountError::TxNotInDispute(tx_id))
+                }
             }
             None => Err(AccountError::NoTxForDispute(tx_id)),
         }
@@ -276,7 +273,10 @@ impl TxProcessor {
     ///
     ///
     /// 'mut rx'
-    pub async fn process_transactions(mut tx_receiver: Receiver<Option<Transaction>>, buffer_size: usize) {
+    pub async fn process_transactions(
+        mut tx_receiver: Receiver<Option<Transaction>>,
+        buffer_size: usize,
+    ) {
         let mut procs = HashMap::<ClientId, AccountProcess>::new();
 
         let mut tx_count = 0;
@@ -324,7 +324,6 @@ impl TxProcessor {
     }
 
     async fn process_account_transactions(id: ClientId, mut rx: Receiver<Option<Transaction>>) {
-
         let mut account = Account::default();
         account.client_id = id;
 
@@ -351,6 +350,169 @@ impl TxProcessor {
 
         debug!("{:?}", account);
 
-        println!("{0},{1:.4},{2:.4},{3:.4},{4}", account.client_id, account.available_amount, account.held_amount, account.total_amount, account.is_locked);
+        println!(
+            "{0},{1:.4},{2:.4},{3:.4},{4}",
+            account.client_id,
+            account.available_amount,
+            account.held_amount,
+            account.total_amount,
+            account.is_locked
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use crate::tx::{Account, Transaction};
+
+    /// tests for default settings
+    #[test]
+    fn account_default() {
+        let a = Account::default();
+        assert_eq!(a.client_id, 0);
+        assert_eq!(a.available_amount, 0.0);
+        assert_eq!(a.held_amount, 0.0);
+        assert_eq!(a.total_amount, 0.0);
+        assert_eq!(a.is_locked, false);
+    }
+
+    #[test]
+    fn account_deposit() {
+        let mut a = Account {
+            client_id: 1,
+            total_amount: 0.0,
+            held_amount: 0.0,
+            available_amount: 0.0,
+            is_locked: false,
+        };
+        let a1 = a.deposit(5.0).unwrap();
+        a = Account {
+            client_id: 1,
+            total_amount: 5.0,
+            held_amount: 0.0,
+            available_amount: 5.0,
+            is_locked: false,
+        };
+
+        assert_eq!(a, a1);
+    }
+
+    #[test]
+    fn account_withdrawal() {
+        let mut a = Account {
+            client_id: 1,
+            total_amount: 15.0,
+            held_amount: 5.0,
+            available_amount: 10.0,
+            is_locked: false,
+        };
+        let a1 = a.withdrawal(5.0).unwrap();
+        a = Account {
+            client_id: 1,
+            total_amount: 10.0,
+            held_amount: 5.0,
+            available_amount: 5.0,
+            is_locked: false,
+        };
+
+        assert_eq!(a, a1);
+    }
+
+    #[test]
+    fn account_dispute() {
+        let mut a = Account {
+            client_id: 1,
+            available_amount: 10.0,
+            held_amount: 5.0,
+            total_amount: 15.0,
+            is_locked: false,
+        };
+        let mut history = HashMap::<u32, Transaction>::new();
+        history.insert(
+            1,
+            Transaction {
+                tx_type: crate::tx::TxType::Deposit,
+                client_id: 1,
+                tx_id: 1,
+                amount: 10.0,
+                in_dispute: false,
+            },
+        );
+        let a1 = a.dispute(1, &mut history).unwrap();
+        a = Account {
+            client_id: 1,
+            available_amount: 0.0,
+            held_amount: 15.0,
+            total_amount: 15.0,
+            is_locked: false,
+        };
+
+        assert_eq!(a, a1);
+    }
+
+    #[test]
+    fn account_resolve() {
+        let mut a = Account {
+            client_id: 1,
+            available_amount: 0.0,
+            held_amount: 15.0,
+            total_amount: 15.0,
+            is_locked: false,
+        };
+        let mut history = HashMap::<u32, Transaction>::new();
+        history.insert(
+            1,
+            Transaction {
+                tx_type: crate::tx::TxType::Deposit,
+                client_id: 1,
+                tx_id: 1,
+                amount: 10.0,
+                in_dispute: true,
+            },
+        );
+        let a1 = a.resolve(1, &mut history).unwrap();
+        a = Account {
+            client_id: 1,
+            available_amount: 10.0,
+            held_amount: 5.0,
+            total_amount: 15.0,
+            is_locked: false,
+        };
+
+        assert_eq!(a, a1);
+    }
+
+    #[test]
+    fn account_chargeback() {
+        let mut a = Account {
+            client_id: 1,
+            available_amount: 10.0,
+            held_amount: 15.0,
+            total_amount: 25.0,
+            is_locked: false,
+        };
+        let mut history = HashMap::<u32, Transaction>::new();
+        history.insert(
+            1,
+            Transaction {
+                tx_type: crate::tx::TxType::Deposit,
+                client_id: 1,
+                tx_id: 1,
+                amount: 10.0,
+                in_dispute: true,
+            },
+        );
+        let a1 = a.chargeback(1, &mut history).unwrap();
+        a = Account {
+            client_id: 1,
+            available_amount: 10.0,
+            held_amount: 5.0,
+            total_amount: 15.0,
+            is_locked: true,
+        };
+
+        assert_eq!(a, a1);
     }
 }
