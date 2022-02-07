@@ -96,14 +96,17 @@ async fn main() -> Result<()> {
         }
     };
 
+    // raw transaction reader task
     let data_reader =
         CsvTransactionReader::process_data_file(opt.csv_file, process_raw_transaction);
 
+    // tx processing task
     let process_transactions = TxProcessor::process_transactions(tx_receiver, opt.buffer);
 
     // prints row with column headers
     println!("client,available,held,total,locked");
 
+    //todo: at the moment our futures return (), we could extend it to return Result and print errors if any
     tokio::join!(data_reader, process_transactions);
 
     Ok(())
