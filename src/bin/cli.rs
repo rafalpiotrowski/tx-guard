@@ -44,15 +44,7 @@ struct Opt {
     csv_file: PathBuf,
 }
 
-/// Entry point.
-///
-/// The `[tokio::main]` annotation signals that the Tokio runtime should be
-/// started when the function is called. The body of the function is executed
-/// within the newly spawned runtime.
-///
-/// `flavor = "current_thread"` is used here to avoid spawning background
-/// threads. The CLI tool use case benefits more by being lighter instead of
-/// multi-threaded. use: #[tokio::main(flavor = "current_thread")]
+/// Entry point 
 #[tokio::main]
 async fn main() -> Result<()> {
 
