@@ -33,13 +33,14 @@ in the project root folder type `cargo test`
 At the moment, if supplied data file has any errors (e.g. missing column, wrong formatting etc) system will exit with panic! giving details about the problem.
 
 ## input data file format: 
+Program accepts only valid data, and panic otherwise on first occourance of any inccorect data 
 ```
 type, client, tx, amount
 
 type: String
 client: u16 (max 65_535)
 tx: u32 (max 4_294_967_295)
-amount: f32 decimal value with precision of upto 4 places past the decimal (system will accept input with any precision)
+amount: f32 decimal value with precision of upto 4 places past the decimal (system will accept input with any precision) and >= 0.0
 ```
 
 ## External Dependencies

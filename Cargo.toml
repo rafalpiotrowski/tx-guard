@@ -37,3 +37,4 @@ csv-async = { version = "1.2.4", features = ["with_serde", "tokio"] }
 [dev-dependencies]
 # Enable test-utilities in dev mode only. This is mostly for tests.
 tokio = { version = "1.16.1", features = ["test-util"] }
+stdio-override = "0.1.3"

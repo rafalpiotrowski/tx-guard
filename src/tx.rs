@@ -16,7 +16,13 @@ impl From<RawTransaction> for Transaction {
                         Some(str_amount) => {
                             let r = str_amount.parse::<f32>();
                             match r {
-                                Ok(value) => value,
+                                Ok(value) => {
+                                    if value >= 0.0 {
+                                        value
+                                    } else {
+                                        panic!("amount '{}' < 0.0", value)
+                                    }
+                                }
                                 Err(_e) => panic!("cannot convert amount '{}' to f32", str_amount),
                             }
                         }
