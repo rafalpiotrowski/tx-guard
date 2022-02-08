@@ -1,28 +1,28 @@
 use txp::{tx::TxProcessor, Transaction};
 use tokio::sync::mpsc::{channel};
-use std::io::{Cursor, BufRead, Write};
+use stdio_override::StdoutOverride;
 
-// #[tokio::test]
-// #[cfg(target_os = "unix")]
-// async fn process_transaction() {
+#[tokio::test]
+#[cfg(target_family = "unix")]
+async fn process_transaction() {
+    use std::fs;
 
-//     let (tx_sender, tx_receiver) = channel::<Option<Transaction>>(2);
+    let (tx_sender, tx_receiver) = channel::<Option<Transaction>>(2);
 
+    let t = Transaction { tx_type: txp::TxType::Deposit, client_id: 1, tx_id: 1, amount: 1.0, in_dispute: false };
+    tx_sender.send(Some(t)).await.expect("failed to send tx");
+    tx_sender.send(None).await.expect("failed to send None");
 
-//     let t = Transaction { tx_type: txp::TxType::Deposit, client_id: 1, tx_id: 1, amount: 1.0, in_dispute: false };
-//     tx_sender.send(Some(t)).await.expect("failed to send tx");
-//     tx_sender.send(None).await.expect("failed to send None");
+    let file_name = "./test_stdout.txt";
+    let _guard = StdoutOverride::override_file(file_name).expect("faild to redirect stdout");
 
-//     let mut c = Cursor::new(Vec::new());
-//     let guard = StdoutOverride::override_file(c)?;
+    TxProcessor::process_transactions(tx_receiver, 2).await;
 
-//     TxProcessor::process_transactions(tx_receiver, 2).await;
+    let captured_stdout = fs::read_to_string(file_name).expect("failed to captured stdout file content");
 
-//     let mut out = Vec::new();
-//     c.read_to_end(&mut out).unwrap();
+    fs::remove_file(file_name).expect("failed to remove file");
 
-//     let output = "client,available,held,total,locked\ndeposit,1,1,1.0000";
+    let expected_output = "1,1.0000,0.0000,1.0000,false\n".to_string();
 
-//     //todo test output
-//     assert_eq!(output, out.);
-// }
+    assert_eq!(captured_stdout, expected_output);
+}
