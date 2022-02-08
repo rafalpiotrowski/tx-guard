@@ -73,6 +73,7 @@ async fn main() -> Result<()> {
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
+    // channels to exchange data
     let (tx_sender, tx_receiver) = mpsc::channel::<Option<Transaction>>(opt.buffer);
 
     // function clousure that converts raw transaction into transaction and sends it down for processing 

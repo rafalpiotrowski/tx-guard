@@ -28,6 +28,8 @@ ARGS:
 
 ## Tests
 in the project root folder type `cargo test`
+Unit tests are only for `Account` in `account.rs` since this is the main business logic
+Integration tests are in folder `tests/` together with some test files
 
 ## Data file correctnes
 At the moment, if supplied data file has any errors (e.g. missing column, wrong formatting etc) system will exit with panic! giving details about the problem.
@@ -61,9 +63,26 @@ amount: f32 decimal value with precision of upto 4 places past the decimal (syst
 `csv-async = { version = "1.2.4", features = ["with_serde", "tokio"] }` (https://crates.io/crates/csv-async)
 
 ## Security vulnerabilities
+At the moment audit did not identify any security issues.
 run `cargo audit` (https://lib.rs/crates/cargo-audit) to get report on the possible security issues
 
 # Architecture
+
+Solution is based on clasical producer/consumer model. We start with 2 tasks
+1. CsvTransactionReader::process_data_file, acting here as producer.
+2. TxProcessor::process_transactions, acting here as consumer
+During the operation of TxProcessor more tasks are created 1 for each Account (i.e. client_id). Like wise here TxProcessor::process_transactions acts like producer for each TxProcessor::process_account_transactions task.
+
+## Memory usage
+
+Since we can have max 65_535 accounts and 4_294_967_295 transactions in the total max memory usage whould be around 70GB :
+- Transaction size is 12 bytes (total max size in memory 69 GB)
+- Account size is 16 bytes (total max size in memory 1 MB)
+- plus memory used to store list of taks etc.
+
+Even if we would have 80% of Deposit and Withraw transactions, it still takes more then we can store in RAM.
+
+For this we would need to use some sort of database to store transactions for lookup and not to keep them in running memory.
 
 ## Cargo project
 Solution is split into 2 parts:
@@ -83,7 +102,9 @@ Function `CsvTransactionReader::process_data_file` in `src/csv.rs` is the future
 In this module we have all functionality related to processing input transactions and spawning seperate tasks that handle transactions for given account. 
 We spawn 1 task per client account, that is responsible for processing it's transactions. (see implementation of `TxProcessor` in `src/tx.rs')
 
-`TxProcessor::process_transactions` is a future that is run asynchronously together with `CsvTransactionReader::process_data_file`
+`TxProcessor::process_transactions` is a future that runs asynchronously together with `CsvTransactionReader::process_data_file`. Program waits for them to both finish before exiting.
 
 ## How to handle multiple data sources?
-TxProcessor
+In order to support multiple datasources we would need to implement producer like the one in CsvTransactionReader::process_data_file so it would act as another producer. It's fairly straight forward as are already using MultiProducer/SingleConsumer channels.
+
+With multi data sources, we could no longer use Option<RawTransaction>. Dedicated message would need to be created to identify the source, necessary for the system to know how many producers there are, so the consumer `TxProcessor::process_transactions` could handle shutdown properly.
