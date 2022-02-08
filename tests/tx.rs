@@ -4,7 +4,7 @@ use stdio_override::StdoutOverride;
 
 #[tokio::test]
 #[cfg(target_family = "unix")]
-async fn process_transaction() {
+async fn process_transaction_test_stdout() {
     use std::fs;
 
     let (tx_sender, tx_receiver) = channel::<Option<Transaction>>(2);
