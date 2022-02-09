@@ -1,40 +1,7 @@
-# txp
-simple transaction verification client
+# TXP - Simple Transaction Processing Engine
+Given an input data file in the CSV format, application will process each transaction and when all transactions are processed, it will print each client account state to stdout in CSV format. 
 
-output of the application is send to the std out
-
-run `cargo run --help` to get possible usage information:
-
-Running `target\debug\txp-cli.exe --help`
-```
-txp 0.1.0
-Rafal Piotrowski <rafalpiotrowski@users.noreply.github.com>
-Transaction Processing System
-
-USAGE:
-    txp-cli.exe [OPTIONS] <file>
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-OPTIONS:
-    -b, --buffer <buffer>      Size of the channel buffer [default: 32]
-    -t, --tracing <tracing>    Tracing level [possible values: Error, Warn, Info, Debug, Trace]
-
-ARGS:
-    <file>    CSV file to process
-```
-
-## Tests
-in the project root folder type `cargo test`
-Unit tests are only for `Account` in `account.rs` since this is the main business logic
-Integration tests are in folder `tests/` together with some test files
-
-## Data file correctnes
-At the moment, if supplied data file has any errors (e.g. missing column, wrong formatting etc) system will exit with panic! giving details about the problem.
-
-## input data file format: 
+## Input data file format
 Program accepts only valid data, and panic otherwise on first occourance of any inccorect data 
 ```
 type, client, tx, amount
@@ -45,26 +12,8 @@ tx: u32 (max 4_294_967_295)
 amount: f32 decimal value with precision of upto 4 places past the decimal (system will accept input with any precision) and >= 0.0
 ```
 
-## External Dependencies
-`futures = "0.3.21"` (https://crates.io/crates/futures)
-
-`tokio = { version = "1.16.1", features = ["full"] }` (https://crates.io/crates/tokio)
-
-`tokio-stream = "0.1.8"` (https://crates.io/crates/tokio-stream)
-
-`tracing = "0.1.30"` (https://crates.io/crates/tracing)
-
-`tracing-subscriber = "0.3.8"` (https://crates.io/crates/tracing-subscriber)
-
-`structopt = "0.3.26"` (https://crates.io/crates/structopt)
-
-`serde = { version = "1.0.136", features = ["derive"] }` (https://crates.io/crates/serde)
-
-`csv-async = { version = "1.2.4", features = ["with_serde", "tokio"] }` (https://crates.io/crates/csv-async)
-
-## Security vulnerabilities
-At the moment audit did not identify any security issues.
-run `cargo audit` (https://lib.rs/crates/cargo-audit) to get report on the possible security issues
+## Data file correctnes
+At the moment, if supplied data file has any errors (e.g. missing column, wrong formatting etc) system will exit with panic! giving details about the problem.
 
 # Architecture
 
@@ -108,3 +57,62 @@ We spawn 1 task per client account, that is responsible for processing it's tran
 In order to support multiple datasources we would need to implement producer like the one in CsvTransactionReader::process_data_file so it would act as another producer. It's fairly straight forward as are already using MultiProducer/SingleConsumer channels.
 
 With multi data sources, we could no longer use Option<RawTransaction>. Dedicated message would need to be created to identify the source, necessary for the system to know how many producers there are, so the consumer `TxProcessor::process_transactions` could handle shutdown properly.
+
+# How to run
+run `cargo run --help` to get possible usage information:
+
+Running `target\debug\txp-cli.exe --help`
+```
+txp 0.1.0
+Rafal Piotrowski <rafalpiotrowski@users.noreply.github.com>
+Transaction Processing System
+
+USAGE:
+    txp-cli.exe [OPTIONS] <file>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -b, --buffer <buffer>      Size of the channel buffer [default: 32]
+    -t, --tracing <tracing>    Tracing level [possible values: Error, Warn, Info, Debug, Trace]
+
+ARGS:
+    <file>    CSV file to process
+```
+
+## Tests
+in the project root folder type `cargo test`
+Unit tests are only for `Account` in `account.rs` since this is the main business logic
+Integration tests are in folder `tests/` together with some test files that are used directly in the test functions.
+Folder `testdata` contains files with can be used when running the program using cli.
+
+## External Dependencies
+`futures = "0.3"` (https://crates.io/crates/futures)
+
+`tokio = { version = "1", features = ["full"] }` (https://crates.io/crates/tokio)
+
+`tokio-stream = "0.1"` (https://crates.io/crates/tokio-stream)
+
+`tracing = "0.1"` (https://crates.io/crates/tracing)
+
+`tracing-subscriber = "0.3"` (https://crates.io/crates/tracing-subscriber)
+
+`structopt = "0.3"` (https://crates.io/crates/structopt)
+
+`serde = { version = "1.0", features = ["derive"] }` (https://crates.io/crates/serde)
+
+`csv-async = { version = "1.2", features = ["with_serde", "tokio"] }` (https://crates.io/crates/csv-async)
+
+### Development dependencis
+`tokio = { version = "1", features = ["test-util"] }`
+
+`stdio-override = "0.1"` (https://crates.io/crates/stdio-override)
+
+Rust library for overriding Stdin/Stdout/Stderr with a different File Descriptor.
+*Works only on UNIX platforms*
+
+## Security vulnerabilities
+At the moment audit did not identify any security issues.
+run `cargo audit` (https://lib.rs/crates/cargo-audit) to get report on the possible security issues
